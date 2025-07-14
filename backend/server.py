@@ -982,6 +982,98 @@ async def get_employee_days(employee_id: str, year_month: str, current_user: dic
     
     return day_details
 
+@api_router.post("/qr-scan", response_model=QRScanResponse)
+async def process_qr_scan(request: QRScanRequest, current_user: dict = Depends(get_current_user)):
+    """Process QR code scan for employee check-in/check-out"""
+    try:
+        # Find employee by QR code
+        employee = await db.employees.find_one({"qr_code": request.qr_code})
+        
+        if not employee:
+            return QRScanResponse(
+                success=False,
+                message="QR kod nie istnieje"
+            )
+        
+        # Check if employee belongs to the same company as the user
+        if str(employee.get("company_id")) != str(current_user.get("company_id")):
+            return QRScanResponse(
+                success=False,
+                message="QR kod nie należy do Twojej firmy"
+            )
+        
+        # Check if employee is active
+        if not employee.get("is_active", True):
+            return QRScanResponse(
+                success=False,
+                message="Pracownik jest nieaktywny"
+            )
+        
+        # Get today's date
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        
+        # Find the last time entry for this employee today
+        last_entry = await db.time_entries.find_one(
+            {"employee_id": employee["id"], "date": today},
+            sort=[("check_in", -1)]
+        )
+        
+        now = datetime.utcnow()
+        
+        # Determine if this is check-in or check-out
+        if not last_entry or last_entry.get("check_out"):
+            # This is check-in
+            action = "check_in"
+            action_text = "Rozpoczęto pracę"
+            
+            # Create new time entry
+            time_entry = TimeEntry(
+                employee_id=employee["id"],
+                check_in=now,
+                check_out=None,
+                date=today,
+                total_hours=None
+            )
+            
+            await db.time_entries.insert_one(time_entry.dict())
+            
+        else:
+            # This is check-out
+            action = "check_out"
+            action_text = "Zakończono pracę"
+            
+            # Update existing time entry
+            check_in = last_entry["check_in"]
+            if isinstance(check_in, str):
+                check_in = datetime.fromisoformat(check_in.replace('Z', '+00:00'))
+            
+            delta = now - check_in
+            total_hours = delta.total_seconds() / 3600
+            
+            await db.time_entries.update_one(
+                {"id": last_entry["id"]},
+                {"$set": {
+                    "check_out": now,
+                    "total_hours": total_hours
+                }}
+            )
+        
+        return QRScanResponse(
+            success=True,
+            action=action,
+            employee_name=employee["name"],
+            time=now.strftime("%Y-%m-%d %H:%M:%S"),
+            message=f"{action_text} dla {employee['name']}",
+            cooldown_seconds=5
+        )
+        
+    except Exception as e:
+        logger.error(f"Error processing QR scan: {str(e)}")
+        return QRScanResponse(
+            success=False,
+            message="Błąd podczas przetwarzania skanowania QR"
+        )
+
 # === ORIGINAL ROUTES (for compatibility) ===
 
 @api_router.get("/")
