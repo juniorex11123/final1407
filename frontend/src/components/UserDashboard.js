@@ -169,10 +169,28 @@ function UserDashboard({ user, onLogout }) {
           <h3 className="text-lg font-semibold text-gray-800 mb-4">
             Skanuj kod QR
           </h3>
+          
+          {/* Cooldown indicator */}
+          {isCooldownActive && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
+              <div className="flex items-center">
+                <svg className="w-5 h-5 text-orange-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                </svg>
+                <span className="text-orange-800 font-medium">
+                  Cooldown aktywny: {cooldownTimer} sekund
+                </span>
+              </div>
+              <p className="text-sm text-orange-700 mt-1">
+                Poczekaj przed kolejnym skanowaniem
+              </p>
+            </div>
+          )}
+          
           <QRScanner 
             onScan={handleQRScan} 
             loading={loading}
-            disabled={loading}
+            disabled={loading || isCooldownActive}
           />
         </div>
 
