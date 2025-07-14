@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import QRScanner from './QRScanner';
-import { employeesAPI, timeEntriesAPI } from '../services/api';
+import { qrScanAPI } from '../services/api';
 
 function UserDashboard({ user, onLogout }) {
   const [scanResult, setScanResult] = useState(null);
@@ -27,72 +27,25 @@ function UserDashboard({ user, onLogout }) {
     setScanResult(null);
 
     try {
-      // Get all employees from the same company
-      const employees = await employeesAPI.getAll();
+      // Process QR scan using the new API
+      const result = await qrScanAPI.processScan(qrData, user.id);
       
-      // Find employee by QR code and ensure they're from the same company
-      const employee = employees.find(e => 
-        e.qr_code === qrData && 
-        String(e.company_id) === String(user.company_id)
-      );
-      
-      if (!employee) {
+      if (result.success) {
         setScanResult({
-          success: false,
-          message: 'QR kod nie należy do Twojej firmy lub nie istnieje',
-          isUnauthorized: true
+          success: true,
+          action: result.action,
+          employee: result.employee_name,
+          time: result.time,
+          message: result.message,
+          cooldown_seconds: result.cooldown_seconds
         });
-        setLoading(false);
-        return;
-      }
-
-      // Check if employee is active
-      if (!employee.is_active) {
-        setScanResult({
-          success: false,
-          message: 'Pracownik jest nieaktywny',
-          isUnauthorized: true
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Get time entries for this employee
-      const timeEntries = await timeEntriesAPI.getAll();
-      const employeeTimeEntries = timeEntries
-        .filter(e => e.employee_id === employee.id)
-        .sort((a, b) => new Date(b.check_in) - new Date(a.check_in));
-
-      const lastEntry = employeeTimeEntries[0];
-      const isCheckingIn = !lastEntry || lastEntry.check_out;
-      const action = isCheckingIn ? 'check_in' : 'check_out';
-      const actionText = isCheckingIn ? 'Rozpoczęto pracę' : 'Zakończono pracę';
-
-      // Create new time entry
-      const now = new Date();
-      const timeEntryData = {
-        employee_id: employee.id,
-        check_in: isCheckingIn ? now.toISOString() : lastEntry.check_in,
-        check_out: isCheckingIn ? null : now.toISOString()
-      };
-
-      // Save time entry
-      if (isCheckingIn) {
-        await timeEntriesAPI.create(timeEntryData);
       } else {
-        await timeEntriesAPI.update(lastEntry.id, {
-          check_out: now.toISOString()
+        setScanResult({
+          success: false,
+          message: result.message,
+          isUnauthorized: true
         });
       }
-
-      setScanResult({
-        success: true,
-        action: action,
-        employee: employee.name,
-        time: now.toLocaleString('pl-PL'),
-        message: `${actionText} dla ${employee.name}`,
-        cooldown_seconds: 5
-      });
 
     } catch (error) {
       console.error('Error processing QR scan:', error);
