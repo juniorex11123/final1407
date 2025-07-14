@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import QrScanner from 'qr-scanner';
 
 function QRScanner({ onScan, loading, disabled }) {
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState(null);
   const [facingMode, setFacingMode] = useState('environment');
   const videoRef = useRef(null);
-  const streamRef = useRef(null);
+  const qrScannerRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -18,45 +19,66 @@ function QRScanner({ onScan, loading, disabled }) {
       setError(null);
       setIsScanning(true);
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode }
-      });
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
+      if (qrScannerRef.current) {
+        qrScannerRef.current.destroy();
       }
+
+      const qrScanner = new QrScanner(
+        videoRef.current,
+        (result) => {
+          if (result && result.data) {
+            console.log('QR Code detected:', result.data);
+            onScan(result.data);
+            // Optionally stop scanning after successful scan
+            // stopScanning();
+          }
+        },
+        {
+          onDecodeError: (err) => {
+            // Ignore decode errors as they're common during scanning
+            console.log('Decode error (normal during scanning):', err);
+          },
+          preferredCamera: facingMode,
+          highlightScanRegion: true,
+          highlightCodeOutline: true,
+          returnDetailedScanResult: true,
+        }
+      );
+
+      qrScannerRef.current = qrScanner;
+      await qrScanner.start();
+
     } catch (err) {
-      setError('Nie można uzyskać dostępu do kamery');
+      console.error('Error starting QR scanner:', err);
+      setError('Nie można uzyskać dostępu do kamery. Sprawdź uprawnienia.');
       setIsScanning(false);
     }
   };
 
   const stopScanning = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
+    if (qrScannerRef.current) {
+      qrScannerRef.current.destroy();
+      qrScannerRef.current = null;
     }
     setIsScanning(false);
   };
 
-  const toggleCamera = () => {
-    stopScanning();
-    setFacingMode(facingMode === 'environment' ? 'user' : 'environment');
-  };
-
-  const handleVideoClick = () => {
-    // Simulate QR code scanning for demo
-    if (isScanning && !loading) {
-      // Generate a mock QR code for demo
-      const mockQRCodes = ['QR-EMP-001', 'QR-EMP-002', 'QR-INVALID-001'];
-      const randomQR = mockQRCodes[Math.floor(Math.random() * mockQRCodes.length)];
-      onScan(randomQR);
+  const toggleCamera = async () => {
+    const newFacingMode = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(newFacingMode);
+    
+    if (qrScannerRef.current) {
+      try {
+        await qrScannerRef.current.setCamera(newFacingMode);
+      } catch (err) {
+        console.error('Error switching camera:', err);
+        setError('Nie można przełączyć kamery');
+      }
     }
   };
 
   useEffect(() => {
-    if (isScanning && facingMode) {
+    if (isScanning) {
       startScanning();
     }
   }, [facingMode]);
@@ -70,26 +92,13 @@ function QRScanner({ onScan, loading, disabled }) {
       )}
 
       <div className="relative">
-        {isScanning ? (
-          <div className="relative">
-            <video
-              ref={videoRef}
-              className="qr-scanner-video w-full h-64 object-cover rounded-lg"
-              autoPlay
-              playsInline
-              onClick={handleVideoClick}
-            />
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-48 h-48 border-2 border-white rounded-lg shadow-lg">
-                <div className="w-full h-full border-2 border-dashed border-white/50 rounded-lg flex items-center justify-center">
-                  <span className="text-white text-sm font-medium bg-black/50 px-2 py-1 rounded">
-                    Kliknij aby zeskanować
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
+        <video
+          ref={videoRef}
+          className="qr-scanner-video w-full h-64 object-cover rounded-lg"
+          style={{ display: isScanning ? 'block' : 'none' }}
+        />
+        
+        {!isScanning && (
           <div className="w-full h-64 bg-gray-200 rounded-lg flex items-center justify-center">
             <p className="text-gray-500">Kamera nie jest aktywna</p>
           </div>
@@ -97,7 +106,7 @@ function QRScanner({ onScan, loading, disabled }) {
 
         {loading && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
-            <div className="spinner"></div>
+            <div className="spinner border-4 border-gray-300 border-t-blue-500 rounded-full w-8 h-8 animate-spin"></div>
           </div>
         )}
       </div>
@@ -128,7 +137,8 @@ function QRScanner({ onScan, loading, disabled }) {
 
       <div className="mt-2 text-sm text-gray-600">
         <p>• Kamera: {facingMode === 'environment' ? 'Tylna' : 'Przednia'}</p>
-        <p>• Kliknij na obraz aby zeskanować kod QR (demo)</p>
+        <p>• Skieruj kamerę na kod QR aby go zeskanować</p>
+        <p>• Upewnij się, że kod QR jest dobrze oświetlony</p>
       </div>
     </div>
   );
