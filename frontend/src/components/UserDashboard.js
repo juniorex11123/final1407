@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import QRScanner from './QRScanner';
-import { mockData } from '../utils/mockData';
+import { employeesAPI, timeEntriesAPI } from '../services/api';
 
 function UserDashboard({ user, onLogout }) {
   const [scanResult, setScanResult] = useState(null);
@@ -13,9 +13,10 @@ function UserDashboard({ user, onLogout }) {
 
   const fetchCompanyInfo = async () => {
     try {
-      // Mock company info
-      const company = mockData.companies.find(c => c.id === user.company_id);
-      setCompanyInfo(company);
+      // Use company info from user data
+      if (user.company_id && user.company_name) {
+        setCompanyInfo({ id: user.company_id, name: user.company_name });
+      }
     } catch (error) {
       console.error('Błąd pobierania informacji o firmie:', error);
     }
@@ -26,41 +27,75 @@ function UserDashboard({ user, onLogout }) {
     setScanResult(null);
 
     try {
-      // Mock QR scan processing
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Get all employees from the same company
+      const employees = await employeesAPI.getAll();
       
-      // Find employee by QR code
-      const employee = mockData.employees.find(e => e.qr_code === qrData && e.company_id === user.company_id);
+      // Find employee by QR code and ensure they're from the same company
+      const employee = employees.find(e => 
+        e.qr_code === qrData && 
+        String(e.company_id) === String(user.company_id)
+      );
       
       if (!employee) {
         setScanResult({
           success: false,
-          message: 'QR kod nie należy do Twojej firmy',
+          message: 'QR kod nie należy do Twojej firmy lub nie istnieje',
           isUnauthorized: true
         });
         setLoading(false);
         return;
       }
 
-      // Check if employee is checking in or out
-      const lastEntry = mockData.timeEntries
-        .filter(e => e.employee_id === employee.id)
-        .sort((a, b) => new Date(b.check_in) - new Date(a.check_in))[0];
+      // Check if employee is active
+      if (!employee.is_active) {
+        setScanResult({
+          success: false,
+          message: 'Pracownik jest nieaktywny',
+          isUnauthorized: true
+        });
+        setLoading(false);
+        return;
+      }
 
+      // Get time entries for this employee
+      const timeEntries = await timeEntriesAPI.getAll();
+      const employeeTimeEntries = timeEntries
+        .filter(e => e.employee_id === employee.id)
+        .sort((a, b) => new Date(b.check_in) - new Date(a.check_in));
+
+      const lastEntry = employeeTimeEntries[0];
       const isCheckingIn = !lastEntry || lastEntry.check_out;
       const action = isCheckingIn ? 'check_in' : 'check_out';
       const actionText = isCheckingIn ? 'Rozpoczęto pracę' : 'Zakończono pracę';
+
+      // Create new time entry
+      const now = new Date();
+      const timeEntryData = {
+        employee_id: employee.id,
+        check_in: isCheckingIn ? now.toISOString() : lastEntry.check_in,
+        check_out: isCheckingIn ? null : now.toISOString()
+      };
+
+      // Save time entry
+      if (isCheckingIn) {
+        await timeEntriesAPI.create(timeEntryData);
+      } else {
+        await timeEntriesAPI.update(lastEntry.id, {
+          check_out: now.toISOString()
+        });
+      }
 
       setScanResult({
         success: true,
         action: action,
         employee: employee.name,
-        time: new Date().toLocaleString('pl-PL'),
+        time: now.toLocaleString('pl-PL'),
         message: `${actionText} dla ${employee.name}`,
         cooldown_seconds: 5
       });
 
     } catch (error) {
+      console.error('Error processing QR scan:', error);
       setScanResult({
         success: false,
         message: 'Błąd połączenia z serwerem'
