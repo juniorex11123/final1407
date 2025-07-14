@@ -860,7 +860,7 @@ async def get_employee_summary(month: Optional[str] = None, year: Optional[int] 
             }
         }).to_list(1000)
         
-        total_hours = sum(entry.get("total_hours", 0) for entry in time_entries)
+        total_hours = sum(entry.get("total_hours", 0) or 0 for entry in time_entries)
         
         employee_summaries.append(EmployeeSummary(
             employee_id=employee["id"],
