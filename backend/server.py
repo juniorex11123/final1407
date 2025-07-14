@@ -1011,14 +1011,38 @@ async def process_qr_scan(request: QRScanRequest, current_user: dict = Depends(g
         
         # Get today's date
         today = datetime.utcnow().strftime("%Y-%m-%d")
+        now = datetime.utcnow()
+        
+        # Check for recent scans (5 second cooldown)
+        recent_scan_key = f"scan_cooldown_{current_user['id']}_{employee['id']}"
+        cooldown_check = await db.scan_cooldowns.find_one({"key": recent_scan_key})
+        
+        if cooldown_check:
+            last_scan_time = cooldown_check["timestamp"]
+            if isinstance(last_scan_time, str):
+                last_scan_time = datetime.fromisoformat(last_scan_time.replace('Z', '+00:00'))
+            
+            time_diff = (now - last_scan_time).total_seconds()
+            if time_diff < 5:
+                remaining_cooldown = int(5 - time_diff)
+                return QRScanResponse(
+                    success=False,
+                    message=f"Musisz poczekać {remaining_cooldown} sekund przed kolejnym skanowaniem",
+                    cooldown_seconds=remaining_cooldown
+                )
+        
+        # Update cooldown timestamp
+        await db.scan_cooldowns.update_one(
+            {"key": recent_scan_key},
+            {"$set": {"timestamp": now, "user_id": current_user["id"], "employee_id": employee["id"]}},
+            upsert=True
+        )
         
         # Find the last time entry for this employee today
         last_entry = await db.time_entries.find_one(
             {"employee_id": employee["id"], "date": today},
             sort=[("check_in", -1)]
         )
-        
-        now = datetime.utcnow()
         
         # Determine if this is check-in or check-out
         if not last_entry or last_entry.get("check_out"):
