@@ -11,7 +11,7 @@ from datetime import datetime
 import base64
 
 class TimeTrackerAPITester:
-    def __init__(self, base_url="https://d37a8724-07ae-4bd6-ae5e-3b13625a20cb.preview.emergentagent.com"):
+    def __init__(self, base_url="http://localhost:8001"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.tokens = {}  # Store tokens for different users
