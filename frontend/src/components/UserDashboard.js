@@ -72,10 +72,8 @@ function UserDashboard({ user, onLogout }) {
           cooldown_seconds: result.cooldown_seconds
         });
         
-        // Start cooldown timer
-        if (result.cooldown_seconds) {
-          setCooldownTimer(result.cooldown_seconds);
-        }
+        // DO NOT start cooldown timer on successful scan
+        // Cooldown is managed by the server
       } else {
         setScanResult({
           success: false,
