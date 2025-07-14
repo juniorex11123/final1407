@@ -974,7 +974,7 @@ async def get_employee_days(employee_id: str, year_month: str, current_user: dic
             date=entry["date"],
             check_in=check_in_str,
             check_out=check_out_str,
-            total_hours=entry.get("total_hours", 0)
+            total_hours=entry.get("total_hours", 0) or 0
         ))
     
     # Sort by date
