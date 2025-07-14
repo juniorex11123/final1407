@@ -26,7 +26,7 @@ function QRScanner({ onScan, loading, disabled }) {
       const qrScanner = new QrScanner(
         videoRef.current,
         (result) => {
-          if (result && result.data) {
+          if (result && result.data && !disabled) {
             console.log('QR Code detected:', result.data);
             onScan(result.data);
             // Optionally stop scanning after successful scan
