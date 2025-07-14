@@ -141,6 +141,18 @@ class QRResponse(BaseModel):
     qr_code_data: str
     qr_code_image: str  # base64 encoded image
 
+class QRScanRequest(BaseModel):
+    qr_code: str
+    user_id: str
+
+class QRScanResponse(BaseModel):
+    success: bool
+    action: Optional[str] = None
+    employee_name: Optional[str] = None
+    time: Optional[str] = None
+    message: str
+    cooldown_seconds: Optional[int] = None
+
 # === UTILITY FUNCTIONS ===
 
 def hash_password(password: str) -> str:
