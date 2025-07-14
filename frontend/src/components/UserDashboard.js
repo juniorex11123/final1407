@@ -6,10 +6,33 @@ function UserDashboard({ user, onLogout }) {
   const [scanResult, setScanResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [companyInfo, setCompanyInfo] = useState(null);
+  const [cooldownTimer, setCooldownTimer] = useState(0);
+  const [isCooldownActive, setIsCooldownActive] = useState(false);
 
   useEffect(() => {
     fetchCompanyInfo();
   }, []);
+
+  useEffect(() => {
+    let interval = null;
+    if (cooldownTimer > 0) {
+      setIsCooldownActive(true);
+      interval = setInterval(() => {
+        setCooldownTimer(timer => {
+          if (timer <= 1) {
+            setIsCooldownActive(false);
+            return 0;
+          }
+          return timer - 1;
+        });
+      }, 1000);
+    } else {
+      setIsCooldownActive(false);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [cooldownTimer]);
 
   const fetchCompanyInfo = async () => {
     try {
@@ -23,6 +46,15 @@ function UserDashboard({ user, onLogout }) {
   };
 
   const handleQRScan = async (qrData) => {
+    if (isCooldownActive) {
+      setScanResult({
+        success: false,
+        message: `Musisz poczekać ${cooldownTimer} sekund przed kolejnym skanowaniem`,
+        isCooldown: true
+      });
+      return;
+    }
+
     setLoading(true);
     setScanResult(null);
 
@@ -39,12 +71,23 @@ function UserDashboard({ user, onLogout }) {
           message: result.message,
           cooldown_seconds: result.cooldown_seconds
         });
+        
+        // Start cooldown timer
+        if (result.cooldown_seconds) {
+          setCooldownTimer(result.cooldown_seconds);
+        }
       } else {
         setScanResult({
           success: false,
           message: result.message,
-          isUnauthorized: true
+          isUnauthorized: !result.message.includes('poczekać'),
+          isCooldown: result.message.includes('poczekać')
         });
+        
+        // If it's a cooldown error, extract the time
+        if (result.cooldown_seconds) {
+          setCooldownTimer(result.cooldown_seconds);
+        }
       }
 
     } catch (error) {
