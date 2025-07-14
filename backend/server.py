@@ -1021,10 +1021,16 @@ async def process_qr_scan(request: QRScanRequest, current_user: dict = Depends(g
             last_scan_time = cooldown_check["timestamp"]
             if isinstance(last_scan_time, str):
                 last_scan_time = datetime.fromisoformat(last_scan_time.replace('Z', '+00:00'))
+            elif hasattr(last_scan_time, 'replace'):
+                # It's already a datetime object
+                pass
+            else:
+                # Convert timestamp to datetime if needed
+                last_scan_time = datetime.fromtimestamp(last_scan_time)
             
             time_diff = (now - last_scan_time).total_seconds()
             if time_diff < 5:
-                remaining_cooldown = int(5 - time_diff)
+                remaining_cooldown = max(1, int(5 - time_diff))
                 return QRScanResponse(
                     success=False,
                     message=f"Musisz poczekać {remaining_cooldown} sekund przed kolejnym skanowaniem",
