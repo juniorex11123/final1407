@@ -199,4 +199,12 @@ export const employeeSummaryAPI = {
   },
 };
 
+// QR Scan API
+export const qrScanAPI = {
+  processScan: async (qrCode, userId) => {
+    const response = await api.post('/qr-scan', { qr_code: qrCode, user_id: userId });
+    return response.data;
+  },
+};
+
 export default api;
