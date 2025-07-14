@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test QR Code Scanner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .qr-container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .qr-code {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+            padding: 10px;
+            background: #f0f0f0;
+            border: 2px solid #333;
+        }
+        .instructions {
+            background: #e8f4f8;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .results {
+            background: #f8f8f8;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            min-height: 100px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .error {
+            color: red;
+            background: #ffe6e6;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            color: green;
+            background: #e6ffe6;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test QR Code Scanner - TimeTracker Pro</h1>
+    
+    <div class="instructions">
+        <h2>Instrukcje:</h2>
+        <ol>
+            <li>Zaloguj się używając przycisków poniżej</li>
+            <li>Testuj skanowanie QR kodów</li>
+            <li>Sprawdź, czy system poprawnie identyfikuje firmę pracownika</li>
+        </ol>
+    </div>
+
+    <div class="qr-container">
+        <h2>Kody QR do testowania:</h2>
+        <div class="qr-code" id="qr-emp-001">QR-EMP-001</div>
+        <p>Jan Kowalski (Firma ABC - company_id: "1")</p>
+        
+        <div class="qr-code" id="qr-emp-002">QR-EMP-002</div>
+        <p>Anna Nowak (Firma ABC - company_id: "1")</p>
+        
+        <div class="qr-code" id="qr-invalid">QR-EMP-999</div>
+        <p>Nieistniejący pracownik</p>
+    </div>
+
+    <div>
+        <h2>Logowanie:</h2>
+        <button onclick="login('user', 'user123')">Zaloguj jako User (Firma ABC)</button>
+        <button onclick="login('admin', 'admin123')">Zaloguj jako Admin (Firma ABC)</button>
+        <button onclick="logout()">Wyloguj</button>
+    </div>
+
+    <div>
+        <h2>Test QR Skanowania:</h2>
+        <button onclick="scanQR('QR-EMP-001')">Skanuj QR-EMP-001</button>
+        <button onclick="scanQR('QR-EMP-002')">Skanuj QR-EMP-002</button>
+        <button onclick="scanQR('QR-EMP-999')">Skanuj QR-EMP-999 (Nieistniejący)</button>
+    </div>
+
+    <div class="results">
+        <h2>Wyniki:</h2>
+        <div id="results">Zaloguj się, aby przetestować skanowanie QR</div>
+    </div>
+
+    <script>
+        let authToken = null;
+        let currentUser = null;
+
+        async function login(username, password) {
+            try {
+                const response = await fetch('http://localhost:8001/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.access_token;
+                    currentUser = data.user;
+                    document.getElementById('results').innerHTML = `
+                        <div class="success">
+                            <strong>Zalogowano pomyślnie!</strong><br>
+                            Użytkownik: ${currentUser.username}<br>
+                            Typ: ${currentUser.type}<br>
+                            Firma: ${currentUser.company_name} (ID: ${currentUser.company_id})
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('results').innerHTML = `
+                        <div class="error">
+                            <strong>Błąd logowania:</strong> ${data.detail || 'Nieznany błąd'}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('results').innerHTML = `
+                    <div class="error">
+                        <strong>Błąd połączenia:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        async function scanQR(qrCode) {
+            if (!authToken || !currentUser) {
+                document.getElementById('results').innerHTML = `
+                    <div class="error">
+                        <strong>Błąd:</strong> Musisz być zalogowany, aby skanować QR kod
+                    </div>
+                `;
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:8001/api/qr-scan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ qr_code: qrCode, user_id: currentUser.id })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    document.getElementById('results').innerHTML = `
+                        <div class="success">
+                            <strong>Skanowanie QR pomyślne!</strong><br>
+                            Kod QR: ${qrCode}<br>
+                            Pracownik: ${data.employee_name}<br>
+                            Akcja: ${data.action === 'check_in' ? 'Rozpoczęcie pracy' : 'Zakończenie pracy'}<br>
+                            Czas: ${data.time}<br>
+                            Wiadomość: ${data.message}
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('results').innerHTML = `
+                        <div class="error">
+                            <strong>Błąd skanowania QR:</strong><br>
+                            Kod QR: ${qrCode}<br>
+                            Wiadomość: ${data.message}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('results').innerHTML = `
+                    <div class="error">
+                        <strong>Błąd połączenia:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            document.getElementById('results').innerHTML = 'Wylogowano pomyślnie. Zaloguj się ponownie, aby przetestować skanowanie QR.';
+        }
+    </script>
+</body>
+</html>
