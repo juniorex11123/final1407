@@ -903,7 +903,7 @@ async def get_employee_months(employee_id: str, current_user: dict = Depends(get
                 "days_worked": set()
             }
         
-        monthly_data[year_month]["total_hours"] += entry.get("total_hours", 0)
+        monthly_data[year_month]["total_hours"] += entry.get("total_hours", 0) or 0
         monthly_data[year_month]["days_worked"].add(date_str)
     
     # Convert to response format
